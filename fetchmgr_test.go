@@ -2,6 +2,7 @@ package fetchmgr_test
 
 import (
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -66,4 +67,26 @@ func str(v interface{}, err error) (string, error) {
 		return "", fmt.Errorf("Not a string: %v", v)
 	}
 	return s, nil
+}
+
+type constFetcher int
+
+func (c constFetcher) Fetch(key interface{}) (interface{}, error) {
+	return "const", nil
+}
+
+func TestCachedFetcherNan(t *testing.T) {
+	cached := New(constFetcher(0))
+
+	ks := []float64{math.NaN(), math.Inf(+1), math.Inf(-1)}
+
+	for _, k := range ks {
+		v, err := cached.Fetch(k)
+		if err != nil {
+			t.Fatalf("Shouldn't throw errors for %.f: %v", k, err)
+		}
+		if v != "const" {
+			t.Fatalf(`Gets %v for %.f, wants "const"`, k, v)
+		}
+	}
 }
