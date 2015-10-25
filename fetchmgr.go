@@ -33,22 +33,42 @@ type CachedFetcher struct {
 // New creates CachedFetcher
 func New(
 	fetcher Fetcher,
-	ttl time.Duration,
+	ss ...Setting,
 ) *CachedFetcher {
-	n := 10
-	mutex := make([]sync.Mutex, n)
-	cache := make([]map[interface{}]interface{}, n)
-
 	cached := &CachedFetcher{
 		fetcher:   fetcher,
-		ttl:       ttl,
-		bucketNum: uint(n),
-		mutex:     mutex,
-		cache:     cache,
+		ttl:       1 * time.Minute,
+		bucketNum: 10,
 	}
+
+	for _, set := range ss {
+		set(cached)
+	}
+
+	cached.mutex = make([]sync.Mutex, cached.bucketNum)
+	cached.cache = make([]map[interface{}]interface{}, cached.bucketNum)
+
 	cached.prepare()
 
 	return cached
+}
+
+// Setting makes arguments for New constracter
+type Setting func(*CachedFetcher)
+
+// SetTTL sets the expiration time of caches
+func SetTTL(t time.Duration) Setting {
+	return func(cf *CachedFetcher) {
+		cf.ttl = t
+	}
+}
+
+// SetBucketNum sets the number of map instance
+// The default values is 10.
+func SetBucketNum(n uint) Setting {
+	return func(cf *CachedFetcher) {
+		cf.bucketNum = n
+	}
 }
 
 // Fetch memoizes fetcher.Fetch method.

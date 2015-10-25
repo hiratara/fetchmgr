@@ -16,7 +16,7 @@ func (m mapFetcher) Fetch(key interface{}) (interface{}, error) {
 
 func TestCachedFetcher(t *testing.T) {
 	fetcher := mapFetcher{1: "one", 2: "two"}
-	cached := New(fetcher, time.Millisecond*10)
+	cached := New(fetcher, SetTTL(time.Millisecond*10))
 
 	one, err := str(cached.Fetch(1))
 	if err != nil {
