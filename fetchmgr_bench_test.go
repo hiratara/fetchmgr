@@ -3,6 +3,7 @@ package fetchmgr_test
 import (
 	"fmt"
 	"math/rand"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -25,7 +26,7 @@ func (cnt *slowIdentityFetcher) Fetch(key interface{}) (interface{}, error) {
 
 func BenchmarkCachedFetcher(b *testing.B) {
 	benchmarkFetcher(b, func(fetcher Fetcher) Fetcher {
-		return New(fetcher, time.Second*10)
+		return New(fetcher, SetTTL(time.Second*10))
 	})
 }
 
@@ -52,11 +53,20 @@ func benchmarkFetcher(b *testing.B, wrap func(Fetcher) Fetcher) {
 			}
 			left -= n
 			go func() {
-				for k := 0; k < n; k++ {
-					k := rand.Intn(keynum)
-					v, err := cached.Fetch(k)
-					if err != nil || k != v {
-						fmt.Printf("ERRRO: %d != %d, %v\r", k, v, err)
+				for i := 0; i < n; i++ {
+					rnd := rand.Intn(keynum)
+					var key interface{}
+					switch rnd % 3 {
+					case 0:
+						key = rnd
+					case 1:
+						key = float64(rnd)
+					case 2:
+						key = strconv.Itoa(rnd)
+					}
+					val, err := cached.Fetch(key)
+					if err != nil || key != val {
+						fmt.Printf("ERRRO: %v != %v, %v\r", key, val, err)
 					}
 				}
 				wg.Done()
