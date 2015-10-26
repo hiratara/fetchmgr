@@ -3,6 +3,7 @@ package fetchmgr_test
 import (
 	"fmt"
 	"math/rand"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -55,11 +56,13 @@ func benchmarkFetcher(b *testing.B, wrap func(Fetcher) Fetcher) {
 				for i := 0; i < n; i++ {
 					rnd := rand.Intn(keynum)
 					var key interface{}
-					switch rnd % 2 {
+					switch rnd % 3 {
 					case 0:
 						key = rnd
 					case 1:
 						key = float64(rnd)
+					case 2:
+						key = strconv.Itoa(rnd)
 					}
 					val, err := cached.Fetch(key)
 					if err != nil || key != val {
