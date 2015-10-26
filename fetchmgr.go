@@ -66,6 +66,9 @@ func SetTTL(t time.Duration) Setting {
 
 // SetBucketNum sets the number of map instance
 // The default values is 10.
+// Only Hasher instance, int, float64, string types support multiple map
+// instance feature. If you don't use these types as keys, you had better
+// set 1 for BucketNum.
 func SetBucketNum(n uint) Setting {
 	return func(cf *CachedFetcher) {
 		cf.bucketNum = n
