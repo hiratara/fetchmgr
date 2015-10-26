@@ -4,6 +4,7 @@ import (
 	"hash/fnv"
 	"sync"
 	"time"
+	"unsafe"
 )
 
 // Fetcher is the interface in order to fetch outer resources
@@ -120,6 +121,9 @@ func hash(k interface{}) uint {
 	case int:
 		kkk := KInt(kk)
 		return kkk.Hash()
+	case float64:
+		kkk := KFloat64(kk)
+		return kkk.Hash()
 	case string:
 		return KStr(kk).Hash()
 	}
@@ -137,6 +141,19 @@ type KInt int
 // Hash calculates hash values
 func (k KInt) Hash() uint {
 	return uint(k)
+}
+
+// KFloat64 is hashable float64
+type KFloat64 float64
+
+// Hash calculates hash values
+func (k KFloat64) Hash() uint {
+	b := *(*[unsafe.Sizeof(k)]byte)(unsafe.Pointer(&k))
+
+	h := fnv.New64a()
+	h.Write(b[:])
+
+	return uint(h.Sum64())
 }
 
 // KStr is hashable string

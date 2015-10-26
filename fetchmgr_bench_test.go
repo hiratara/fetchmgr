@@ -52,11 +52,18 @@ func benchmarkFetcher(b *testing.B, wrap func(Fetcher) Fetcher) {
 			}
 			left -= n
 			go func() {
-				for k := 0; k < n; k++ {
-					k := rand.Intn(keynum)
-					v, err := cached.Fetch(k)
-					if err != nil || k != v {
-						fmt.Printf("ERRRO: %d != %d, %v\r", k, v, err)
+				for i := 0; i < n; i++ {
+					rnd := rand.Intn(keynum)
+					var key interface{}
+					switch rnd % 2 {
+					case 0:
+						key = rnd
+					case 1:
+						key = float64(rnd)
+					}
+					val, err := cached.Fetch(key)
+					if err != nil || key != val {
+						fmt.Printf("ERRRO: %v != %v, %v\r", key, val, err)
 					}
 				}
 				wg.Done()
