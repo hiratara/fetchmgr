@@ -25,10 +25,14 @@ func (f FuncFetcher) Fetch(k interface{}) (interface{}, error) {
 type CachedFetcher struct {
 	fetcher   Fetcher
 	ttl       time.Duration
-	expires   time.Time
 	bucketNum uint
 	mutex     []sync.Mutex
-	cache     []map[interface{}]interface{}
+	cache     []map[interface{}]entry
+}
+
+type entry struct {
+	value   interface{}
+	expires time.Time
 }
 
 // New creates CachedFetcher
@@ -47,7 +51,7 @@ func New(
 	}
 
 	cached.mutex = make([]sync.Mutex, cached.bucketNum)
-	cached.cache = make([]map[interface{}]interface{}, cached.bucketNum)
+	cached.cache = make([]map[interface{}]entry, cached.bucketNum)
 
 	cached.prepare()
 
@@ -86,11 +90,11 @@ func (c *CachedFetcher) Fetch(key interface{}) (interface{}, error) {
 	c.mutex[h].Lock()
 	defer c.mutex[h].Unlock()
 
-	c.cleanup()
+	// TODO: Remove expired entries
 
 	cached, ok := c.cache[h][key]
-	if ok {
-		return cached, nil
+	if ok && time.Now().Before(cached.expires) {
+		return cached.value, nil
 	}
 
 	val, err := c.fetcher.Fetch(key)
@@ -98,23 +102,15 @@ func (c *CachedFetcher) Fetch(key interface{}) (interface{}, error) {
 		return val, err
 	}
 
-	c.cache[h][key] = val
+	expires := time.Now().Add(c.ttl)
+	c.cache[h][key] = entry{value: val, expires: expires}
 	return val, nil
 }
 
 func (c *CachedFetcher) prepare() {
 	for i := range c.cache {
-		c.cache[i] = map[interface{}]interface{}{}
+		c.cache[i] = map[interface{}]entry{}
 	}
-	c.expires = time.Now().Add(c.ttl)
-}
-
-func (c *CachedFetcher) cleanup() {
-	if time.Now().Before(c.expires) {
-		return
-	}
-
-	c.prepare()
 }
 
 func hash(k interface{}) uint {
