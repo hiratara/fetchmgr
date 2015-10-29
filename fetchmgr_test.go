@@ -17,7 +17,7 @@ func (m mapFetcher) Fetch(key interface{}) (interface{}, error) {
 
 func TestCachedFetcher(t *testing.T) {
 	fetcher := mapFetcher{1: "one", 2: "two"}
-	cached := New(fetcher, SetTTL(time.Millisecond*10))
+	cached := New(fetcher, SetTTL(time.Millisecond*100))
 
 	one, err := str(cached.Fetch(1))
 	if err != nil {
@@ -28,7 +28,7 @@ func TestCachedFetcher(t *testing.T) {
 	}
 
 	// Then, fetch another values
-	time.Sleep(time.Millisecond * 5)
+	time.Sleep(time.Millisecond * 50)
 	two, err := str(cached.Fetch(2))
 	if err != nil {
 		t.Fatalf("Get error %v, wants nil", err)
@@ -49,7 +49,7 @@ func TestCachedFetcher(t *testing.T) {
 	}
 
 	// Waiting for clearing caches for "one"
-	time.Sleep(time.Millisecond * 5)
+	time.Sleep(time.Millisecond * 50)
 	one, err = str(cached.Fetch(1))
 	if err != nil {
 		t.Fatalf("Get error %v, wants nil", err)
@@ -78,7 +78,7 @@ func TestCachedFetcher(t *testing.T) {
 	}
 
 	// Waiting for clearing caches for "two"
-	time.Sleep(time.Millisecond * 5)
+	time.Sleep(time.Millisecond * 50)
 	two, err = str(cached.Fetch(2))
 	if err != nil {
 		t.Fatalf("Get error %v, wants nil", err)
