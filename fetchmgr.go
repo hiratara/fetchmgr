@@ -31,7 +31,7 @@ type CachedFetcher struct {
 }
 
 type entry struct {
-	value   interface{}
+	value   func() (interface{}, error)
 	expires time.Time
 }
 
@@ -88,42 +88,60 @@ func (c *CachedFetcher) Fetch(key interface{}) (interface{}, error) {
 	h := hash(key) % c.bucketNum
 
 	c.mutex[h].Lock()
-	defer c.mutex[h].Unlock()
 
 	cached, ok := c.cache[h][key]
 	if ok && time.Now().Before(cached.expires) {
-		return cached.value, nil
-	}
-
-	val, err := c.fetcher.Fetch(key)
-	if err != nil {
-		return val, err
+		c.mutex[h].Unlock()
+		return cached.value()
 	}
 
 	expires := time.Now().Add(c.ttl)
-	c.cache[h][key] = entry{value: val, expires: expires}
 
+	var val interface{}
+	var err error
+	done := make(chan struct{})
 	go func() {
-		time.Sleep(c.ttl)
+		val, err = c.fetcher.Fetch(key)
+		close(done)
 
-		c.mutex[h].Lock()
-		defer c.mutex[h].Unlock()
-
-		cmap := c.cache[h]
-		if cmap[key].expires != expires {
-			// Our entry has been gone :/
+		if err != nil {
+			// Don't cache error values
+			c.deleteKey(expires, h, key)
 			return
 		}
-		delete(cmap, key)
+
+		time.Sleep(expires.Sub(time.Now()))
+
+		c.deleteKey(expires, h, key)
 	}()
 
-	return val, nil
+	lazy := func() (interface{}, error) {
+		<-done
+		return val, err
+	}
+	c.cache[h][key] = entry{value: lazy, expires: expires}
+
+	c.mutex[h].Unlock()
+
+	return lazy()
 }
 
 func (c *CachedFetcher) prepare() {
 	for i := range c.cache {
 		c.cache[i] = map[interface{}]entry{}
 	}
+}
+
+func (c *CachedFetcher) deleteKey(expires time.Time, h uint, key interface{}) {
+	c.mutex[h].Lock()
+	defer c.mutex[h].Unlock()
+
+	cmap := c.cache[h]
+	if cmap[key].expires != expires {
+		// Our entry has been gone :/
+		return
+	}
+	delete(cmap, key)
 }
 
 func hash(k interface{}) uint {
