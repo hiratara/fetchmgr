@@ -90,8 +90,6 @@ func (c *CachedFetcher) Fetch(key interface{}) (interface{}, error) {
 	c.mutex[h].Lock()
 	defer c.mutex[h].Unlock()
 
-	// TODO: Remove expired entries
-
 	cached, ok := c.cache[h][key]
 	if ok && time.Now().Before(cached.expires) {
 		return cached.value, nil
@@ -104,6 +102,16 @@ func (c *CachedFetcher) Fetch(key interface{}) (interface{}, error) {
 
 	expires := time.Now().Add(c.ttl)
 	c.cache[h][key] = entry{value: val, expires: expires}
+
+	go func() {
+		time.Sleep(c.ttl)
+
+		c.mutex[h].Lock()
+		defer c.mutex[h].Unlock()
+
+		delete(c.cache[h], key)
+	}()
+
 	return val, nil
 }
 
