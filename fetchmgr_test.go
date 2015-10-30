@@ -1,6 +1,7 @@
 package fetchmgr_test
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"testing"
@@ -9,14 +10,24 @@ import (
 	. "github.com/hiratara/fetchmgr"
 )
 
-type mapFetcher map[int]string
+type fetchRet struct {
+	value string
+	err   error
+}
+
+type mapFetcher map[int]fetchRet
 
 func (m mapFetcher) Fetch(key interface{}) (interface{}, error) {
-	return m[key.(int)], nil
+	r := m[key.(int)]
+	return r.value, r.err
 }
 
 func TestCachedFetcher(t *testing.T) {
-	fetcher := mapFetcher{1: "one", 2: "two"}
+	fetcher := mapFetcher{
+		1: {"one", nil},
+		2: {"two", nil},
+		3: {"", errors.New("no 3rd elems")},
+	}
 	cached := New(fetcher, SetTTL(time.Millisecond*100))
 
 	one, err := str(cached.Fetch(1))
@@ -25,6 +36,14 @@ func TestCachedFetcher(t *testing.T) {
 	}
 	if one != "one" {
 		t.Fatalf(`Get %v, wants "one"`, one)
+	}
+
+	three, err := str(cached.Fetch(3))
+	if err == nil {
+		t.Fatal(`"Gets nil, wants "no 3rd elems" err`)
+	}
+	if three != "" {
+		t.Fatalf(`Gets %v, wants ""`, three)
 	}
 
 	// Then, fetch another values
@@ -40,12 +59,21 @@ func TestCachedFetcher(t *testing.T) {
 	// Change values
 	delete(fetcher, 1)
 	delete(fetcher, 2)
+	fetcher[3] = fetchRet{"three", nil}
 	one, err = str(cached.Fetch(1))
 	if err != nil {
 		t.Fatalf("Get error %v, wants nil", err)
 	}
 	if one != "one" {
 		t.Fatalf(`Get %v, wants "one" (cached data)`, one)
+	}
+
+	three, err = str(cached.Fetch(3))
+	if err != nil {
+		t.Fatalf("Get error %v, wants nil", err)
+	}
+	if three != "three" {
+		t.Fatalf(`Gets %v, wants "three" (fetched normaly)`, one)
 	}
 
 	// Waiting for clearing caches for "one"
@@ -67,8 +95,8 @@ func TestCachedFetcher(t *testing.T) {
 	}
 
 	// Change values
-	fetcher[1] = "ONE"
-	fetcher[2] = "TWO"
+	fetcher[1] = fetchRet{"ONE", nil}
+	fetcher[2] = fetchRet{"TWO", nil}
 	one, err = str(cached.Fetch(1))
 	if err != nil {
 		t.Fatalf("Get error %v, wants nil", err)
