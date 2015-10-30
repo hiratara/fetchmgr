@@ -109,7 +109,12 @@ func (c *CachedFetcher) Fetch(key interface{}) (interface{}, error) {
 		c.mutex[h].Lock()
 		defer c.mutex[h].Unlock()
 
-		delete(c.cache[h], key)
+		cmap := c.cache[h]
+		if cmap[key].expires != expires {
+			// Our entry has been gone :/
+			return
+		}
+		delete(cmap, key)
 	}()
 
 	return val, nil
