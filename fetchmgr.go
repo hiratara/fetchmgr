@@ -90,7 +90,7 @@ func (c *CachedFetcher) Fetch(key interface{}) (interface{}, error) {
 	c.mutex[h].Lock()
 
 	cached, ok := c.cache[h][key]
-	if ok && time.Now().Before(cached.expires) {
+	if ok {
 		c.mutex[h].Unlock()
 		return cached.value()
 	}

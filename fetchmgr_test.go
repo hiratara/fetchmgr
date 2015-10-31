@@ -47,7 +47,7 @@ func TestCachedFetcher(t *testing.T) {
 	}
 
 	// Then, fetch another values
-	time.Sleep(time.Millisecond * 50)
+	time.Sleep(time.Millisecond * 55)
 	two, err := str(cached.Fetch(2))
 	if err != nil {
 		t.Fatalf("Get error %v, wants nil", err)
@@ -77,7 +77,7 @@ func TestCachedFetcher(t *testing.T) {
 	}
 
 	// Waiting for clearing caches for "one"
-	time.Sleep(time.Millisecond * 50)
+	time.Sleep(time.Millisecond * 55)
 	one, err = str(cached.Fetch(1))
 	if err != nil {
 		t.Fatalf("Get error %v, wants nil", err)
@@ -106,7 +106,7 @@ func TestCachedFetcher(t *testing.T) {
 	}
 
 	// Waiting for clearing caches for "two"
-	time.Sleep(time.Millisecond * 50)
+	time.Sleep(time.Millisecond * 55)
 	two, err = str(cached.Fetch(2))
 	if err != nil {
 		t.Fatalf("Get error %v, wants nil", err)
