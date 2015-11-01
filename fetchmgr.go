@@ -49,10 +49,13 @@ func New(
 		set(cached)
 	}
 
-	cached.mutex = make([]sync.Mutex, cached.bucketNum)
-	cached.cache = make([]map[interface{}]entry, cached.bucketNum)
+	cache := make([]map[interface{}]entry, cached.bucketNum)
+	for i := range cache {
+		cache[i] = map[interface{}]entry{}
+	}
 
-	cached.prepare()
+	cached.mutex = make([]sync.Mutex, cached.bucketNum)
+	cached.cache = cache
 
 	return cached
 }
@@ -126,12 +129,6 @@ func pickEntry(c *CachedFetcher, key interface{}) entry {
 	c.cache[h][key] = cached
 
 	return cached
-}
-
-func (c *CachedFetcher) prepare() {
-	for i := range c.cache {
-		c.cache[i] = map[interface{}]entry{}
-	}
 }
 
 func (c *CachedFetcher) deleteKey(h uint, key interface{}) {
