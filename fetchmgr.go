@@ -31,8 +31,7 @@ type CachedFetcher struct {
 }
 
 type entry struct {
-	value   interface{}
-	expires time.Time
+	value func() (interface{}, error)
 }
 
 // New creates CachedFetcher
@@ -50,10 +49,13 @@ func New(
 		set(cached)
 	}
 
-	cached.mutex = make([]sync.Mutex, cached.bucketNum)
-	cached.cache = make([]map[interface{}]entry, cached.bucketNum)
+	cache := make([]map[interface{}]entry, cached.bucketNum)
+	for i := range cache {
+		cache[i] = map[interface{}]entry{}
+	}
 
-	cached.prepare()
+	cached.mutex = make([]sync.Mutex, cached.bucketNum)
+	cached.cache = cache
 
 	return cached
 }
@@ -85,45 +87,55 @@ func SetBucketNum(n uint) Setting {
 // If the internal Fetcher.Fetch returns err (!= nil), CachedFetcher doesn't
 // cache any results.
 func (c *CachedFetcher) Fetch(key interface{}) (interface{}, error) {
+	e := pickEntry(c, key)
+	return e.value()
+}
+
+func pickEntry(c *CachedFetcher, key interface{}) entry {
 	h := hash(key) % c.bucketNum
 
 	c.mutex[h].Lock()
 	defer c.mutex[h].Unlock()
 
 	cached, ok := c.cache[h][key]
-	if ok && time.Now().Before(cached.expires) {
-		return cached.value, nil
+	if ok {
+		return cached
 	}
 
-	val, err := c.fetcher.Fetch(key)
-	if err != nil {
+	var val interface{}
+	var err error
+	done := make(chan struct{})
+	go func() {
+		defer c.deleteKey(h, key)
+
+		val, err = c.fetcher.Fetch(key)
+		close(done)
+
+		if err != nil {
+			// Don't reuse error values
+			return
+		}
+
+		// Wait for our entry expired
+		time.Sleep(c.ttl)
+	}()
+
+	lazy := func() (interface{}, error) {
+		<-done
 		return val, err
 	}
 
-	expires := time.Now().Add(c.ttl)
-	c.cache[h][key] = entry{value: val, expires: expires}
+	cached = entry{value: lazy}
+	c.cache[h][key] = cached
 
-	go func() {
-		time.Sleep(c.ttl)
-
-		c.mutex[h].Lock()
-		defer c.mutex[h].Unlock()
-
-		cmap := c.cache[h]
-		if cmap[key].expires != expires {
-			// Our entry has been gone :/
-			return
-		}
-		delete(cmap, key)
-	}()
-
-	return val, nil
+	return cached
 }
 
-func (c *CachedFetcher) prepare() {
-	for i := range c.cache {
-		c.cache[i] = map[interface{}]entry{}
-	}
+func (c *CachedFetcher) deleteKey(h uint, key interface{}) {
+	c.mutex[h].Lock()
+	defer c.mutex[h].Unlock()
+
+	delete(c.cache[h], key)
 }
 
 func hash(k interface{}) uint {
