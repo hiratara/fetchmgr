@@ -84,14 +84,19 @@ func SetBucketNum(n uint) Setting {
 // If the internal Fetcher.Fetch returns err (!= nil), CachedFetcher doesn't
 // cache any results.
 func (c *CachedFetcher) Fetch(key interface{}) (interface{}, error) {
+	e := pickEntry(c, key)
+	return e.value()
+}
+
+func pickEntry(c *CachedFetcher, key interface{}) entry {
 	h := hash(key) % c.bucketNum
 
 	c.mutex[h].Lock()
+	defer c.mutex[h].Unlock()
 
 	cached, ok := c.cache[h][key]
 	if ok {
-		c.mutex[h].Unlock()
-		return cached.value()
+		return cached
 	}
 
 	var val interface{}
@@ -116,11 +121,11 @@ func (c *CachedFetcher) Fetch(key interface{}) (interface{}, error) {
 		<-done
 		return val, err
 	}
-	c.cache[h][key] = entry{value: lazy}
 
-	c.mutex[h].Unlock()
+	cached = entry{value: lazy}
+	c.cache[h][key] = cached
 
-	return lazy()
+	return cached
 }
 
 func (c *CachedFetcher) prepare() {
