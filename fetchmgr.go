@@ -31,8 +31,7 @@ type CachedFetcher struct {
 }
 
 type entry struct {
-	value   func() (interface{}, error)
-	expires time.Time
+	value func() (interface{}, error)
 }
 
 // New creates CachedFetcher
@@ -95,31 +94,29 @@ func (c *CachedFetcher) Fetch(key interface{}) (interface{}, error) {
 		return cached.value()
 	}
 
-	expires := time.Now().Add(c.ttl)
-
 	var val interface{}
 	var err error
 	done := make(chan struct{})
 	go func() {
+		defer c.deleteKey(h, key)
+
 		val, err = c.fetcher.Fetch(key)
 		close(done)
 
 		if err != nil {
-			// Don't cache error values
-			c.deleteKey(expires, h, key)
+			// Don't reuse error values
 			return
 		}
 
-		time.Sleep(expires.Sub(time.Now()))
-
-		c.deleteKey(expires, h, key)
+		// Wait for our entry expired
+		time.Sleep(c.ttl)
 	}()
 
 	lazy := func() (interface{}, error) {
 		<-done
 		return val, err
 	}
-	c.cache[h][key] = entry{value: lazy, expires: expires}
+	c.cache[h][key] = entry{value: lazy}
 
 	c.mutex[h].Unlock()
 
@@ -132,16 +129,11 @@ func (c *CachedFetcher) prepare() {
 	}
 }
 
-func (c *CachedFetcher) deleteKey(expires time.Time, h uint, key interface{}) {
+func (c *CachedFetcher) deleteKey(h uint, key interface{}) {
 	c.mutex[h].Lock()
 	defer c.mutex[h].Unlock()
 
-	cmap := c.cache[h]
-	if cmap[key].expires != expires {
-		// Our entry has been gone :/
-		return
-	}
-	delete(cmap, key)
+	delete(c.cache[h], key)
 }
 
 func hash(k interface{}) uint {
