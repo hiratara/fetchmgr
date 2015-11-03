@@ -21,6 +21,22 @@ func (bf BucketedFetcher) Fetch(key interface{}) (interface{}, error) {
 	return fs[i].Fetch(key)
 }
 
+func hash(k interface{}) uint {
+	switch kk := k.(type) {
+	case Hasher:
+		return kk.Hash()
+	case int:
+		kkk := KInt(kk)
+		return kkk.Hash()
+	case float64:
+		kkk := KFloat64(kk)
+		return kkk.Hash()
+	case string:
+		return KStr(kk).Hash()
+	}
+	return 0
+}
+
 // Hasher provides a function in order to calculate its hash values
 type Hasher interface {
 	Hash() uint
