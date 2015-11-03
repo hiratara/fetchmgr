@@ -1,12 +1,19 @@
 package fetchmgr
 
 import (
+	"io"
 	"time"
 )
 
 // Fetcher is the interface in order to fetch outer resources
 type Fetcher interface {
 	Fetch(interface{}) (interface{}, error)
+}
+
+// FetchCloser has Fetch and Close method
+type FetchCloser interface {
+	Fetcher
+	io.Closer
 }
 
 // FuncFetcher makes new Fetcher from a function
@@ -21,7 +28,7 @@ func (f FuncFetcher) Fetch(k interface{}) (interface{}, error) {
 func New(
 	fetcher Fetcher,
 	ss ...Setting,
-) Fetcher {
+) FetchCloser {
 	setting := &fetcherSetting{
 		bucketNum: 10,
 		ttl:       1 * time.Minute,

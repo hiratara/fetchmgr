@@ -80,6 +80,11 @@ func benchmarkFetcher(b *testing.B, wrap func(Fetcher) Fetcher) {
 		}
 		wg.Wait()
 
+		fc, ok := cached.(FetchCloser)
+		if ok {
+			fc.Close()
+		}
+
 		if int(result) != keynum {
 			fmt.Printf("Access to resource %d times, wants %d\r", result, keynum)
 		}
