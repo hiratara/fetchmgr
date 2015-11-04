@@ -15,6 +15,8 @@ type CachedFetcher struct {
 	cache    map[interface{}]entry
 	queMutex sync.Mutex
 	queue    deleteQueue
+	awake    chan struct{}
+	closed   chan struct{}
 }
 
 type entry struct {
@@ -30,9 +32,11 @@ func NewCachedFetcher(
 		fetcher: fetcher,
 		ttl:     ttl,
 		cache:   make(map[interface{}]entry),
+		awake:   make(chan struct{}, 1),
+		closed:  make(chan struct{}),
 	}
 
-	go cached.deleteLoop()
+	go deleteLoop(cached)
 
 	return cached
 }
@@ -45,6 +49,21 @@ func NewCachedFetcher(
 func (c *CachedFetcher) Fetch(key interface{}) (interface{}, error) {
 	e := pickEntry(c, key)
 	return e.value()
+}
+
+// Close closes this instance
+func (c *CachedFetcher) Close() error {
+	close(c.closed)
+
+	fc, ok := c.fetcher.(FetchCloser)
+	if ok {
+		err := fc.Close()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func pickEntry(c *CachedFetcher, key interface{}) entry {
@@ -65,11 +84,12 @@ func pickEntry(c *CachedFetcher, key interface{}) entry {
 
 		if err != nil {
 			// Don't reuse error values
-			c.queueKey(key, 0)
+			deleteKey(c, key)
 			return
 		}
 
-		c.queueKey(key, c.ttl)
+		queueKey(c, key, c.ttl)
+		awakeLoop(c)
 	}()
 
 	lazy := func() (interface{}, error) {
@@ -83,14 +103,14 @@ func pickEntry(c *CachedFetcher, key interface{}) entry {
 	return cached
 }
 
-func (c *CachedFetcher) deleteKey(key interface{}) {
+func deleteKey(c *CachedFetcher, key interface{}) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
 	delete(c.cache, key)
 }
 
-func (c *CachedFetcher) queueKey(key interface{}, ttl time.Duration) {
+func queueKey(c *CachedFetcher, key interface{}, ttl time.Duration) {
 	c.queMutex.Lock()
 	defer c.queMutex.Unlock()
 
@@ -98,20 +118,45 @@ func (c *CachedFetcher) queueKey(key interface{}, ttl time.Duration) {
 	heap.Push(&c.queue, item)
 }
 
-func (c *CachedFetcher) deleteLoop() {
+func deleteLoop(c *CachedFetcher) {
+Loop:
 	for {
+		deleting := make([]interface{}, 0, c.queue.Len())
+
 		c.queMutex.Lock()
-		if c.queue.Len() > 0 {
+		for c.queue.Len() > 0 {
 			item := heap.Pop(&c.queue).(deleteItem)
-			if item.expire.Before(time.Now()) {
-				c.deleteKey(item.key)
-			} else {
+			if item.expire.After(time.Now()) {
+				untilNext := item.expire.Sub(time.Now())
 				heap.Push(&c.queue, item)
+				go func() {
+					time.Sleep(untilNext)
+					awakeLoop(c)
+				}()
+				break
 			}
+			deleting = append(deleting, item.key)
 		}
 		c.queMutex.Unlock()
 
-		time.Sleep(1 * time.Millisecond)
+		for _, key := range deleting {
+			// Delete here to avoid a dead lock
+			deleteKey(c, key)
+		}
+
+		time.Sleep(5 * time.Millisecond) // Sleep at least 5 ms
+		select {
+		case <-c.closed:
+			break Loop
+		case <-c.awake:
+		}
+	}
+}
+
+func awakeLoop(c *CachedFetcher) {
+	select {
+	case c.awake <- struct{}{}:
+	default:
 	}
 }
 
