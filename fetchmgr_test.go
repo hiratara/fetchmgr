@@ -28,7 +28,11 @@ func TestCachedFetcher(t *testing.T) {
 		2: {"two", nil},
 		3: {"", errors.New("no 3rd elems")},
 	}
-	cached := New(fetcher, SetTTL(time.Millisecond*100))
+	cached := New(
+		fetcher,
+		SetInterval(time.Millisecond*1),
+		SetTTL(time.Millisecond*100),
+	)
 	defer cached.Close()
 
 	one, err := str(cached.Fetch(1))

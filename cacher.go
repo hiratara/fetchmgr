@@ -11,6 +11,7 @@ import (
 type CachedFetcher struct {
 	fetcher  Fetcher
 	ttl      time.Duration
+	interval time.Duration
 	mutex    sync.Mutex
 	cache    map[interface{}]entry
 	queMutex sync.Mutex
@@ -27,13 +28,15 @@ type entry struct {
 func NewCachedFetcher(
 	fetcher Fetcher,
 	ttl time.Duration,
+	interval time.Duration,
 ) *CachedFetcher {
 	cached := &CachedFetcher{
-		fetcher: fetcher,
-		ttl:     ttl,
-		cache:   make(map[interface{}]entry),
-		awake:   make(chan struct{}, 1),
-		closed:  make(chan struct{}),
+		fetcher:  fetcher,
+		ttl:      ttl,
+		interval: interval,
+		cache:    make(map[interface{}]entry),
+		awake:    make(chan struct{}, 1),
+		closed:   make(chan struct{}),
 	}
 
 	go deleteLoop(cached)
@@ -148,7 +151,7 @@ Loop:
 		// Delete here to avoid a dead lock
 		deleteKeys(c, willDelete...)
 
-		time.Sleep(5 * time.Millisecond) // Sleep at least 5 ms
+		time.Sleep(c.interval) // Sleep a specified interval at least
 		select {
 		case <-c.closed:
 			break Loop

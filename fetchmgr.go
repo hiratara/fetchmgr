@@ -32,6 +32,7 @@ func New(
 	setting := &fetcherSetting{
 		bucketNum: 10,
 		ttl:       1 * time.Minute,
+		interval:  1 * time.Second,
 	}
 
 	for _, set := range ss {
@@ -40,7 +41,7 @@ func New(
 
 	fs := make([]Fetcher, setting.bucketNum)
 	for i := range fs {
-		fs[i] = NewCachedFetcher(fetcher, setting.ttl)
+		fs[i] = NewCachedFetcher(fetcher, setting.ttl, setting.interval)
 	}
 
 	return NewBucketedFetcher(fs)
@@ -48,6 +49,7 @@ func New(
 
 type fetcherSetting struct {
 	ttl       time.Duration
+	interval  time.Duration
 	bucketNum uint
 }
 
@@ -58,6 +60,13 @@ type Setting func(*fetcherSetting)
 func SetTTL(t time.Duration) Setting {
 	return func(cf *fetcherSetting) {
 		cf.ttl = t
+	}
+}
+
+// SetInterval sets an interval to check expirations
+func SetInterval(t time.Duration) Setting {
+	return func(cf *fetcherSetting) {
+		cf.interval = t
 	}
 }
 

@@ -26,7 +26,7 @@ func (cnt *slowIdentityFetcher) Fetch(key interface{}) (interface{}, error) {
 
 func BenchmarkCachedFetcher(b *testing.B) {
 	benchmarkFetcher(b, func(fetcher Fetcher) Fetcher {
-		return NewCachedFetcher(fetcher, time.Second*10)
+		return NewCachedFetcher(fetcher, time.Second*10, 5*time.Millisecond)
 	})
 }
 
