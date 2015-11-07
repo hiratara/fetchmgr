@@ -92,7 +92,6 @@ func pickEntry(c *CachedFetcher, key interface{}) entry {
 		}
 
 		queueKey(c, key, c.ttl)
-		awakeLoop(c)
 	}()
 
 	lazy := func() (interface{}, error) {
@@ -125,6 +124,11 @@ func queueKey(c *CachedFetcher, key interface{}, ttl time.Duration) {
 
 	item := deleteItem{key, time.Now().Add(ttl)}
 	heap.Push(&c.queue, item)
+
+	if item == c.queue[0] {
+		// `item` expires first, so we must readjust sleep time
+		awakeLoop(c)
+	}
 }
 
 func deleteLoop(c *CachedFetcher) {
