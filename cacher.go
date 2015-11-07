@@ -84,7 +84,7 @@ func pickEntry(c *CachedFetcher, key interface{}) entry {
 
 		if err != nil {
 			// Don't reuse error values
-			deleteKey(c, key)
+			deleteKeys(c, key)
 			return
 		}
 
@@ -103,11 +103,17 @@ func pickEntry(c *CachedFetcher, key interface{}) entry {
 	return cached
 }
 
-func deleteKey(c *CachedFetcher, key interface{}) {
+func deleteKeys(c *CachedFetcher, keys ...interface{}) {
+	if len(keys) == 0 {
+		return // Lock nothing
+	}
+
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	delete(c.cache, key)
+	for _, k := range keys {
+		delete(c.cache, k)
+	}
 }
 
 func queueKey(c *CachedFetcher, key interface{}, ttl time.Duration) {
@@ -121,7 +127,7 @@ func queueKey(c *CachedFetcher, key interface{}, ttl time.Duration) {
 func deleteLoop(c *CachedFetcher) {
 Loop:
 	for {
-		deleting := make([]interface{}, 0, c.queue.Len())
+		willDelete := make([]interface{}, 0, 1) // Will delete a few keys
 
 		c.queMutex.Lock()
 		for c.queue.Len() > 0 {
@@ -135,14 +141,12 @@ Loop:
 				}()
 				break
 			}
-			deleting = append(deleting, item.key)
+			willDelete = append(willDelete, item.key)
 		}
 		c.queMutex.Unlock()
 
-		for _, key := range deleting {
-			// Delete here to avoid a dead lock
-			deleteKey(c, key)
-		}
+		// Delete here to avoid a dead lock
+		deleteKeys(c, willDelete...)
 
 		time.Sleep(5 * time.Millisecond) // Sleep at least 5 ms
 		select {
