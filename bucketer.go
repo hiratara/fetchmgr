@@ -1,6 +1,8 @@
 package fetchmgr
 
 import (
+	"bytes"
+	"fmt"
 	"hash/fnv"
 	"unsafe"
 )
@@ -19,6 +21,44 @@ func (bf BucketedFetcher) Fetch(key interface{}) (interface{}, error) {
 	fs := ([]Fetcher)(bf)
 	i := hash(key) % uint(len(fs))
 	return fs[i].Fetch(key)
+}
+
+// InnerError has been occured in internal Fetcher()
+type InnerError struct {
+	Fetcher Fetcher
+	Err     error
+}
+
+func (ie InnerError) Error() string {
+	return fmt.Sprintf("%v: %v", ie.Fetcher, ie.Err)
+}
+
+// InnerErrors is a list of InnerError
+type InnerErrors []InnerError
+
+func (ies InnerErrors) Error() string {
+	var buf bytes.Buffer
+	for _, ie := range ies {
+		buf.WriteString(ie.Error() + "\n")
+	}
+	return buf.String()
+}
+
+// Close calls Close() for all internal FetchCloser instances
+func (bf BucketedFetcher) Close() error {
+	var errs []InnerError
+	for _, f := range bf {
+		switch ff := f.(type) {
+		case FetchCloser:
+			err := ff.Close()
+			errs = append(errs, InnerError{ff, err})
+		}
+	}
+	if len(errs) > 0 {
+		return InnerErrors(errs)
+	}
+
+	return nil
 }
 
 func hash(k interface{}) uint {

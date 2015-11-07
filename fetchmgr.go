@@ -1,12 +1,19 @@
 package fetchmgr
 
 import (
+	"io"
 	"time"
 )
 
 // Fetcher is the interface in order to fetch outer resources
 type Fetcher interface {
 	Fetch(interface{}) (interface{}, error)
+}
+
+// FetchCloser has Fetch and Close method
+type FetchCloser interface {
+	Fetcher
+	io.Closer
 }
 
 // FuncFetcher makes new Fetcher from a function
@@ -21,10 +28,11 @@ func (f FuncFetcher) Fetch(k interface{}) (interface{}, error) {
 func New(
 	fetcher Fetcher,
 	ss ...Setting,
-) Fetcher {
+) FetchCloser {
 	setting := &fetcherSetting{
 		bucketNum: 10,
 		ttl:       1 * time.Minute,
+		interval:  1 * time.Second,
 	}
 
 	for _, set := range ss {
@@ -33,7 +41,7 @@ func New(
 
 	fs := make([]Fetcher, setting.bucketNum)
 	for i := range fs {
-		fs[i] = NewCachedFetcher(fetcher, setting.ttl)
+		fs[i] = NewCachedFetcher(fetcher, setting.ttl, setting.interval)
 	}
 
 	return NewBucketedFetcher(fs)
@@ -41,6 +49,7 @@ func New(
 
 type fetcherSetting struct {
 	ttl       time.Duration
+	interval  time.Duration
 	bucketNum uint
 }
 
@@ -51,6 +60,13 @@ type Setting func(*fetcherSetting)
 func SetTTL(t time.Duration) Setting {
 	return func(cf *fetcherSetting) {
 		cf.ttl = t
+	}
+}
+
+// SetInterval sets an interval to check expirations
+func SetInterval(t time.Duration) Setting {
+	return func(cf *fetcherSetting) {
+		cf.interval = t
 	}
 }
 

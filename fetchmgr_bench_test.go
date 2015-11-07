@@ -26,7 +26,7 @@ func (cnt *slowIdentityFetcher) Fetch(key interface{}) (interface{}, error) {
 
 func BenchmarkCachedFetcher(b *testing.B) {
 	benchmarkFetcher(b, func(fetcher Fetcher) Fetcher {
-		return NewCachedFetcher(fetcher, time.Second*10)
+		return NewCachedFetcher(fetcher, time.Second*10, 5*time.Millisecond)
 	})
 }
 
@@ -79,6 +79,11 @@ func benchmarkFetcher(b *testing.B, wrap func(Fetcher) Fetcher) {
 			}()
 		}
 		wg.Wait()
+
+		fc, ok := cached.(FetchCloser)
+		if ok {
+			fc.Close()
+		}
 
 		if int(result) != keynum {
 			fmt.Printf("Access to resource %d times, wants %d\r", result, keynum)
