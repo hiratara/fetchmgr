@@ -2,6 +2,7 @@ package fetchmgr
 
 import (
 	"container/heap"
+	"errors"
 	"sync"
 	"time"
 )
@@ -69,6 +70,9 @@ func (c *CachedFetcher) Close() error {
 	return nil
 }
 
+// ErrFetcherClosed means the underlying fetcher has been closed
+var ErrFetcherClosed = errors.New("fetcher has been already closed")
+
 func pickEntry(c *CachedFetcher, key interface{}) entry {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -95,8 +99,12 @@ func pickEntry(c *CachedFetcher, key interface{}) entry {
 	}()
 
 	lazy := func() (interface{}, error) {
-		<-done
-		return val, err
+		select {
+		case <-done:
+			return val, err
+		case <-c.closed:
+			return nil, ErrFetcherClosed
+		}
 	}
 
 	cached = entry{value: lazy}
@@ -143,7 +151,12 @@ Loop:
 				untilNext := item.expire.Sub(time.Now())
 				heap.Push(&c.queue, item)
 				go func() {
-					time.Sleep(untilNext)
+					t := time.NewTimer(untilNext)
+					select {
+					case <-c.closed:
+						return
+					case <-t.C:
+					}
 					awakeLoop(c)
 				}()
 				break
@@ -155,7 +168,13 @@ Loop:
 		// Delete here to avoid a dead lock
 		deleteKeys(c, willDelete...)
 
-		time.Sleep(c.interval) // Sleep a specified interval at least
+		t := time.NewTimer(c.interval)
+		select {
+		case <-c.closed:
+			break Loop
+		case <-t.C: // Sleep a specified interval at least
+		}
+
 		select {
 		case <-c.closed:
 			break Loop
