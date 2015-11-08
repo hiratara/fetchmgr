@@ -14,6 +14,10 @@ type SafeFetcher struct {
 // NewSafeFetcher makes f thread-safe. It will be a slow instance because
 // all Fetch() calls are serialized.
 func NewSafeFetcher(f Fetcher) Fetcher {
+	return newSafeFetcher(f)
+}
+
+func newSafeFetcher(f Fetcher) SafeFetcher {
 	var mutex sync.Mutex
 	return SafeFetcher{&mutex, f}
 }
@@ -27,13 +31,21 @@ func (sf SafeFetcher) Fetch(k interface{}) (interface{}, error) {
 
 // SafeFetchCloser a synced instance of FetchCloser
 type SafeFetchCloser struct {
-	Fetcher
+	SafeFetcher
 	io.Closer
 }
 
 // NewSafeFetchCloser makes fc thread-safe. It will be a slow instance
 // because all Fetch() calls are serialized.
 func NewSafeFetchCloser(fc FetchCloser) FetchCloser {
-	sf := NewSafeFetcher(fc)
+	sf := newSafeFetcher(fc)
 	return SafeFetchCloser{sf, fc}
+}
+
+// Close closes sfc
+func (sfc SafeFetchCloser) Close() error {
+	m := sfc.SafeFetcher.mutex
+	m.Lock()
+	defer m.Unlock()
+	return sfc.Closer.Close()
 }
