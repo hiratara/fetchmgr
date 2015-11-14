@@ -23,7 +23,7 @@ type CachedFetcher struct {
 }
 
 type entry struct {
-	value func() (interface{}, error)
+	value func(chan struct{}) (interface{}, error)
 }
 
 // NewCachedFetcher creates CachedFetcher
@@ -53,23 +53,7 @@ func NewCachedFetcher(
 // cache any results.
 func (c *CachedFetcher) CancelableFetch(cancel chan struct{}, key interface{}) (interface{}, error) {
 	e := pickEntry(c, key)
-
-	var (
-		v    interface{}
-		err  error
-		done = make(chan struct{})
-	)
-	go func() {
-		v, err = e.value()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-		return v, err
-	case <-cancel:
-		return nil, errors.New("canceled")
-	}
+	return e.value(cancel)
 }
 
 // Close closes this instance
@@ -115,10 +99,12 @@ func pickEntry(c *CachedFetcher, key interface{}) entry {
 		queueKey(c, key, c.ttl)
 	}()
 
-	lazy := func() (interface{}, error) {
+	lazy := func(cancel chan struct{}) (interface{}, error) {
 		select {
 		case <-done:
 			return val, err
+		case <-cancel:
+			return nil, errors.New("canceled")
 		case <-c.closed:
 			return nil, ErrFetcherClosed
 		}
