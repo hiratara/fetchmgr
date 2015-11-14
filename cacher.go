@@ -11,7 +11,7 @@ import (
 // CachedFetcher caches fetched contents. It use Fetcher internally to fetch
 // resources. It will call Fetcher's Fetch method thread-safely.
 type CachedFetcher struct {
-	fetcher  CancelableFetcher
+	fetcher  CFetcher
 	ttl      time.Duration
 	interval time.Duration
 	mutex    sync.Mutex
@@ -28,7 +28,7 @@ type entry struct {
 
 // NewCachedFetcher creates CachedFetcher
 func NewCachedFetcher(
-	fetcher CancelableFetcher,
+	fetcher CFetcher,
 	ttl time.Duration,
 	interval time.Duration,
 ) *CachedFetcher {
@@ -46,12 +46,12 @@ func NewCachedFetcher(
 	return cached
 }
 
-// CancelableFetch memoizes fetcher.Fetch method.
+// CFetch memoizes fetcher.Fetch method.
 // It calls fetcher.Fetch method and caches the return value unless there is no
 // cached results. Chached values are expired when c.ttl has passed.
 // If the internal Fetcher.Fetch returns err (!= nil), CachedFetcher doesn't
 // cache any results.
-func (c *CachedFetcher) CancelableFetch(cancel chan struct{}, key interface{}) (interface{}, error) {
+func (c *CachedFetcher) CFetch(cancel chan struct{}, key interface{}) (interface{}, error) {
 	e := pickEntry(c, key)
 	return e.value(cancel)
 }
@@ -87,7 +87,7 @@ func pickEntry(c *CachedFetcher, key interface{}) entry {
 	var err error
 	done := make(chan struct{})
 	go func() {
-		val, err = c.fetcher.CancelableFetch(c.closed, key)
+		val, err = c.fetcher.CFetch(c.closed, key)
 		close(done)
 
 		if err != nil {

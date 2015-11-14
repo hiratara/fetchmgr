@@ -11,10 +11,10 @@ type SimpleFetcher interface {
 	Fetch(interface{}) (interface{}, error)
 }
 
-// CancelableFetcher is the interface in order to fetch outer resources
+// CFetcher is the interface in order to fetch outer resources
 // It also provides a cancel chan to cancel fetching.
-type CancelableFetcher interface {
-	CancelableFetch(chan struct{}, interface{}) (interface{}, error)
+type CFetcher interface {
+	CFetch(chan struct{}, interface{}) (interface{}, error)
 }
 
 // ErrFetchCanceled means the CancelableFetch call was canceled
@@ -23,7 +23,7 @@ var ErrFetchCanceled = errors.New("calling Fetch canceled")
 // Fetcher is the interface in order to fetch outer resources
 type Fetcher interface {
 	SimpleFetcher
-	CancelableFetcher
+	CFetcher
 }
 
 // FetchCloser has Fetch and Close method
@@ -37,19 +37,19 @@ type MakeCancelable struct {
 	SimpleFetcher
 }
 
-// CancelableFetch fetches resources and provides the cancel chan
-func (tf MakeCancelable) CancelableFetch(cancel chan struct{}, key interface{}) (interface{}, error) {
+// CFetch fetches resources and provides the cancel chan
+func (tf MakeCancelable) CFetch(cancel chan struct{}, key interface{}) (interface{}, error) {
 	return tf.Fetch(key)
 }
 
 // MakeSimple makes Fetcher from CancelableFetcher
 type MakeSimple struct {
-	CancelableFetcher
+	CFetcher
 }
 
 // Fetch fetches resources
 func (tf MakeSimple) Fetch(key interface{}) (interface{}, error) {
-	return tf.CancelableFetch(nil, key)
+	return tf.CFetch(nil, key)
 }
 
 // FuncFetcher makes new Fetcher from a function
@@ -75,7 +75,7 @@ func New(
 		set(setting)
 	}
 
-	fs := make([]CancelableFetcher, setting.bucketNum)
+	fs := make([]CFetcher, setting.bucketNum)
 	for i := range fs {
 		fs[i] = NewCachedFetcher(fetcher, setting.ttl, setting.interval)
 	}

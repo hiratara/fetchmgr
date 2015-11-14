@@ -35,7 +35,7 @@ func TestSafeFetchCloser(t *testing.T) {
 	var f UnsafeFetcher
 	ff := struct {
 		*UnsafeFetcher
-		CancelableFetcher
+		CFetcher
 	}{&f, MakeCancelable{&f}}
 	sf := NewSafeFetchCloser(ff)
 

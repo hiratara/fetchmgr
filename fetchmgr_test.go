@@ -162,7 +162,7 @@ type testCFetcher struct {
 	cnt uint32
 }
 
-func (cf *testCFetcher) CancelableFetch(cancel chan struct{}, key interface{}) (interface{}, error) {
+func (cf *testCFetcher) CFetch(cancel chan struct{}, key interface{}) (interface{}, error) {
 	cf.wg.Add(1)
 	select {
 	case <-cancel:
@@ -181,7 +181,7 @@ func TestCancelAndClose(t *testing.T) {
 	done1 := make(chan struct{})
 	cancel1 := make(chan struct{})
 	go func() {
-		_, err := ccf.CancelableFetch(cancel1, "key")
+		_, err := ccf.CFetch(cancel1, "key")
 		if err == nil {
 			t.Fatalf("Gets nil, wants errors")
 		}
@@ -191,7 +191,7 @@ func TestCancelAndClose(t *testing.T) {
 
 	done2 := make(chan struct{})
 	go func() {
-		_, err := ccf.CancelableFetch(nil, "key")
+		_, err := ccf.CFetch(nil, "key")
 		if err == nil {
 			t.Fatalf("Gets nil, wants errors")
 		}
@@ -201,7 +201,7 @@ func TestCancelAndClose(t *testing.T) {
 
 	done3 := make(chan struct{})
 	go func() {
-		_, err := ccf.CancelableFetch(nil, "KEY")
+		_, err := ccf.CFetch(nil, "KEY")
 		if err == nil {
 			t.Fatalf("Gets nil, wants errors")
 		}
