@@ -5,15 +5,47 @@ import (
 	"time"
 )
 
+// SimpleFetcher is the interface in order to fetch outer resources
+type SimpleFetcher interface {
+	Fetch(interface{}) (interface{}, error)
+}
+
+// CancelableFetcher is the interface in order to fetch outer resources
+// It also provides a cancel chan to cancel fetching.
+type CancelableFetcher interface {
+	CancelableFetch(chan struct{}, interface{}) (interface{}, error)
+}
+
 // Fetcher is the interface in order to fetch outer resources
 type Fetcher interface {
-	Fetch(interface{}) (interface{}, error)
+	SimpleFetcher
+	CancelableFetcher
 }
 
 // FetchCloser has Fetch and Close method
 type FetchCloser interface {
 	Fetcher
 	io.Closer
+}
+
+// MakeCancelable makes Fetcher from SimpleFetcher
+type MakeCancelable struct {
+	SimpleFetcher
+}
+
+// CancelableFetch fetches resources and provides the cancel chan
+func (tf MakeCancelable) CancelableFetch(cancel chan struct{}, key interface{}) (interface{}, error) {
+	return tf.Fetch(key)
+}
+
+// MakeSimple makes Fetcher from CancelableFetcher
+type MakeSimple struct {
+	CancelableFetcher
+}
+
+// Fetch fetches resources
+func (tf MakeSimple) Fetch(key interface{}) (interface{}, error) {
+	return tf.CancelableFetch(nil, key)
 }
 
 // FuncFetcher makes new Fetcher from a function
@@ -39,12 +71,16 @@ func New(
 		set(setting)
 	}
 
-	fs := make([]Fetcher, setting.bucketNum)
+	fs := make([]CancelableFetcher, setting.bucketNum)
 	for i := range fs {
 		fs[i] = NewCachedFetcher(fetcher, setting.ttl, setting.interval)
 	}
 
-	return NewBucketedFetcher(fs)
+	nbf := NewBucketedFetcher(fs)
+	return struct {
+		BucketedFetcher
+		SimpleFetcher
+	}{nbf, MakeSimple{nbf}}
 }
 
 type fetcherSetting struct {

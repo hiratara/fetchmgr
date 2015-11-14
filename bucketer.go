@@ -9,18 +9,18 @@ import (
 
 // BucketedFetcher holds multiple fetchers and scatters tasks
 // by hash values of keys
-type BucketedFetcher []Fetcher
+type BucketedFetcher []CancelableFetcher
 
 // NewBucketedFetcher creates the instance
-func NewBucketedFetcher(fs []Fetcher) BucketedFetcher {
+func NewBucketedFetcher(fs []CancelableFetcher) BucketedFetcher {
 	return BucketedFetcher(fs)
 }
 
-// Fetch calls one of internal Fetchers
-func (bf BucketedFetcher) Fetch(key interface{}) (interface{}, error) {
-	fs := ([]Fetcher)(bf)
+// CancelableFetch calls one of internal Fetchers
+func (bf BucketedFetcher) CancelableFetch(cancel chan struct{}, key interface{}) (interface{}, error) {
+	fs := ([]CancelableFetcher)(bf)
 	i := hash(key) % uint(len(fs))
-	return fs[i].Fetch(key)
+	return fs[i].CancelableFetch(cancel, key)
 }
 
 // InnerError has been occured in internal Fetcher()

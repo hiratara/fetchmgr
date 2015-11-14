@@ -25,18 +25,26 @@ func (cnt *slowIdentityFetcher) Fetch(key interface{}) (interface{}, error) {
 }
 
 func BenchmarkCachedFetcher(b *testing.B) {
-	benchmarkFetcher(b, func(fetcher Fetcher) Fetcher {
-		return NewCachedFetcher(fetcher, time.Second*10, 5*time.Millisecond)
+	benchmarkFetcher(b, func(fetcher SimpleFetcher) Fetcher {
+		cf := NewCachedFetcher(
+			MakeCancelable{fetcher},
+			time.Second*10,
+			5*time.Millisecond,
+		)
+		return MakeSimple{cf}
 	})
 }
 
 func BenchmarkFetcher(b *testing.B) {
-	benchmarkFetcher(b, func(fetcher Fetcher) Fetcher {
-		return New(fetcher, SetTTL(time.Second*10))
+	benchmarkFetcher(b, func(fetcher SimpleFetcher) Fetcher {
+		return New(
+			MakeCancelable{fetcher},
+			SetTTL(time.Second*10),
+		)
 	})
 }
 
-func benchmarkFetcher(b *testing.B, wrap func(Fetcher) Fetcher) {
+func benchmarkFetcher(b *testing.B, wrap func(SimpleFetcher) Fetcher) {
 	b.StopTimer()
 	var baseN = fetchnum / conc
 	b.StartTimer()

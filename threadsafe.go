@@ -29,6 +29,13 @@ func (sf SafeFetcher) Fetch(k interface{}) (interface{}, error) {
 	return sf.fetcher.Fetch(k)
 }
 
+// CancelableFetch fetches a value
+func (sf SafeFetcher) CancelableFetch(cancel chan struct{}, k interface{}) (interface{}, error) {
+	sf.mutex.Lock()
+	defer sf.mutex.Unlock()
+	return sf.fetcher.CancelableFetch(cancel, k)
+}
+
 // SafeFetchCloser a synced instance of FetchCloser
 type SafeFetchCloser struct {
 	SafeFetcher

@@ -22,7 +22,7 @@ func (cnt *UnsafeFetcher) Close() error {
 
 func TestSafeFetcher(t *testing.T) {
 	var f UnsafeFetcher
-	sf := NewSafeFetcher(&f)
+	sf := NewSafeFetcher(MakeCancelable{&f})
 
 	fetch10000Times(t, sf)
 
@@ -33,7 +33,11 @@ func TestSafeFetcher(t *testing.T) {
 
 func TestSafeFetchCloser(t *testing.T) {
 	var f UnsafeFetcher
-	sf := NewSafeFetchCloser(&f)
+	ff := struct {
+		*UnsafeFetcher
+		CancelableFetcher
+	}{&f, MakeCancelable{&f}}
+	sf := NewSafeFetchCloser(ff)
 
 	fetch10000Times(t, sf)
 
