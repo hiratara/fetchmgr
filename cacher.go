@@ -52,7 +52,23 @@ func NewCachedFetcher(
 // cache any results.
 func (c *CachedFetcher) CancelableFetch(cancel chan struct{}, key interface{}) (interface{}, error) {
 	e := pickEntry(c, key)
-	return e.value()
+
+	var (
+		v    interface{}
+		err  error
+		done = make(chan struct{})
+	)
+	go func() {
+		v, err = e.value()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		return v, err
+	case <-cancel:
+		return nil, errors.New("canceled")
+	}
 }
 
 // Close closes this instance
@@ -86,7 +102,7 @@ func pickEntry(c *CachedFetcher, key interface{}) entry {
 	var err error
 	done := make(chan struct{})
 	go func() {
-		val, err = c.fetcher.CancelableFetch(nil, key)
+		val, err = c.fetcher.CancelableFetch(c.closed, key)
 		close(done)
 
 		if err != nil {
