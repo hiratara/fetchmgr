@@ -104,7 +104,7 @@ func pickEntry(c *CachedFetcher, key interface{}) entry {
 		case <-done:
 			return val, err
 		case <-cancel:
-			return nil, errors.New("canceled")
+			return nil, ErrFetchCanceled
 		case <-c.closed:
 			return nil, ErrFetcherClosed
 		}

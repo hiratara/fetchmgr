@@ -1,6 +1,7 @@
 package fetchmgr
 
 import (
+	"errors"
 	"io"
 	"time"
 )
@@ -15,6 +16,9 @@ type SimpleFetcher interface {
 type CancelableFetcher interface {
 	CancelableFetch(chan struct{}, interface{}) (interface{}, error)
 }
+
+// ErrFetchCanceled means the CancelableFetch call was canceled
+var ErrFetchCanceled = errors.New("calling Fetch canceled")
 
 // Fetcher is the interface in order to fetch outer resources
 type Fetcher interface {
