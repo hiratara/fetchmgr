@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"hash/fnv"
+	"io"
 	"unsafe"
 )
 
@@ -25,7 +26,7 @@ func (bf BucketedFetcher) CancelableFetch(cancel chan struct{}, key interface{})
 
 // InnerError has been occured in internal Fetcher()
 type InnerError struct {
-	Fetcher Fetcher
+	Fetcher CancelableFetcher
 	Err     error
 }
 
@@ -49,9 +50,9 @@ func (bf BucketedFetcher) Close() error {
 	var errs []InnerError
 	for _, f := range bf {
 		switch ff := f.(type) {
-		case FetchCloser:
+		case io.Closer:
 			err := ff.Close()
-			errs = append(errs, InnerError{ff, err})
+			errs = append(errs, InnerError{f, err})
 		}
 	}
 	if len(errs) > 0 {

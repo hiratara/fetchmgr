@@ -3,6 +3,7 @@ package fetchmgr
 import (
 	"container/heap"
 	"errors"
+	"io"
 	"sync"
 	"time"
 )
@@ -75,7 +76,7 @@ func (c *CachedFetcher) CancelableFetch(cancel chan struct{}, key interface{}) (
 func (c *CachedFetcher) Close() error {
 	close(c.closed)
 
-	fc, ok := c.fetcher.(FetchCloser)
+	fc, ok := c.fetcher.(io.Closer)
 	if ok {
 		err := fc.Close()
 		if err != nil {
