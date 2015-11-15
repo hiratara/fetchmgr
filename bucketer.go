@@ -18,7 +18,7 @@ func NewBucketedCFetcher(fs []CFetcher) BucketedCFetcher {
 }
 
 // CFetch calls one of internal Fetchers
-func (bf BucketedCFetcher) CFetch(cancel chan struct{}, key interface{}) (interface{}, error) {
+func (bf BucketedCFetcher) CFetch(cancel <-chan struct{}, key interface{}) (interface{}, error) {
 	fs := ([]CFetcher)(bf)
 	i := hash(key) % uint(len(fs))
 	return fs[i].CFetch(cancel, key)

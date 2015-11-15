@@ -23,7 +23,7 @@ type CachedCFetcher struct {
 }
 
 type entry struct {
-	value func(chan struct{}) (interface{}, error)
+	value func(<-chan struct{}) (interface{}, error)
 }
 
 // NewCachedCFetcher creates CachedCFetcher
@@ -51,7 +51,7 @@ func NewCachedCFetcher(
 // cached results. Chached values are expired when c.ttl has passed.
 // If the internal Fetcher.Fetch returns err (!= nil), CachedCFetcher doesn't
 // cache any results.
-func (c *CachedCFetcher) CFetch(cancel chan struct{}, key interface{}) (interface{}, error) {
+func (c *CachedCFetcher) CFetch(cancel <-chan struct{}, key interface{}) (interface{}, error) {
 	e := pickEntry(c, key)
 	return e.value(cancel)
 }
@@ -99,7 +99,7 @@ func pickEntry(c *CachedCFetcher, key interface{}) entry {
 		queueKey(c, key, c.ttl)
 	}()
 
-	lazy := func(cancel chan struct{}) (interface{}, error) {
+	lazy := func(cancel <-chan struct{}) (interface{}, error) {
 		select {
 		case <-done:
 			return val, err

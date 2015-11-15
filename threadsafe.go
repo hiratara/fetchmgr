@@ -23,7 +23,7 @@ func newSafeCFetcher(f CFetcher) safeCFetcher {
 }
 
 // CFetch fetches a value
-func (sf safeCFetcher) CFetch(cancel chan struct{}, k interface{}) (interface{}, error) {
+func (sf safeCFetcher) CFetch(cancel <-chan struct{}, k interface{}) (interface{}, error) {
 	sf.mutex.Lock()
 	defer sf.mutex.Unlock()
 	return sf.fetcher.CFetch(cancel, k)

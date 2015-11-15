@@ -9,7 +9,7 @@ import (
 // CFetcher is the interface in order to fetch outer resources
 // It also provides a cancel chan to cancel fetching.
 type CFetcher interface {
-	CFetch(chan struct{}, interface{}) (interface{}, error)
+	CFetch(<-chan struct{}, interface{}) (interface{}, error)
 }
 
 // ErrFetchCanceled means the CFetch call was canceled
@@ -36,7 +36,7 @@ type asCFetcher struct {
 	Fetcher
 }
 
-func (tf asCFetcher) CFetch(cancel chan struct{}, key interface{}) (interface{}, error) {
+func (tf asCFetcher) CFetch(cancel <-chan struct{}, key interface{}) (interface{}, error) {
 	return tf.Fetch(key)
 }
 
