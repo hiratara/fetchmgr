@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -152,5 +154,80 @@ func TestCachedFetcherNan(t *testing.T) {
 		if v != "const" {
 			t.Fatalf(`Gets %v for %.f, wants "const"`, k, v)
 		}
+	}
+}
+
+type testCFetcher struct {
+	wg  sync.WaitGroup
+	cnt uint32
+}
+
+func (cf *testCFetcher) CFetch(cancel chan struct{}, key interface{}) (interface{}, error) {
+	cf.wg.Add(1)
+	select {
+	case <-cancel:
+		atomic.AddUint32(&cf.cnt, 1)
+		cf.wg.Done()
+		return nil, errors.New("canceled")
+	}
+}
+
+func TestCancelAndClose(t *testing.T) {
+	cf := &testCFetcher{}
+	ccf := CNew(cf)
+
+	var canceled uint32
+
+	done1 := make(chan struct{})
+	cancel1 := make(chan struct{})
+	go func() {
+		_, err := ccf.CFetch(cancel1, "key")
+		if err == nil {
+			t.Fatalf("Gets nil, wants errors")
+		}
+		atomic.AddUint32(&canceled, 1)
+		close(done1)
+	}()
+
+	done2 := make(chan struct{})
+	go func() {
+		_, err := ccf.CFetch(nil, "key")
+		if err == nil {
+			t.Fatalf("Gets nil, wants errors")
+		}
+		atomic.AddUint32(&canceled, 1)
+		close(done2)
+	}()
+
+	done3 := make(chan struct{})
+	go func() {
+		_, err := ccf.CFetch(nil, "KEY")
+		if err == nil {
+			t.Fatalf("Gets nil, wants errors")
+		}
+		atomic.AddUint32(&canceled, 1)
+		close(done3)
+	}()
+
+	close(cancel1)
+	<-done1
+	time.Sleep(10 * time.Millisecond) // Check if done2 isn't canceled
+	if canceled != 1 {
+		t.Fatalf("Gets %d canceled, wants 1", canceled)
+	}
+	if cf.cnt != 0 {
+		t.Fatalf("Gets %d canceled internal calls, wants 0", canceled)
+	}
+
+	ccf.Close()
+	<-done2
+	<-done3
+	cf.wg.Wait()
+	time.Sleep(10 * time.Millisecond) // Wait for all cancel calls
+	if canceled != 3 {
+		t.Fatalf("Gets %d canceled, wants 3", canceled)
+	}
+	if cf.cnt != 2 {
+		t.Fatalf(`Gets %d canceled internal calls, wants 2 ("key" and "KEY")`, cf.cnt)
 	}
 }

@@ -6,46 +6,68 @@ import (
 )
 
 // SafeFetcher is a synced instance of Fetcher
-type SafeFetcher struct {
+type safeCFetcher struct {
 	mutex   *sync.Mutex
-	fetcher Fetcher
+	fetcher CFetcher
+}
+
+// NewSafeCFetcher makes f thread-safe. It will be a slow instance because
+// all CFetch() calls are serialized.
+func NewSafeCFetcher(f CFetcher) CFetcher {
+	return newSafeCFetcher(f)
+}
+
+func newSafeCFetcher(f CFetcher) safeCFetcher {
+	var mutex sync.Mutex
+	return safeCFetcher{&mutex, f}
+}
+
+// CFetch fetches a value
+func (sf safeCFetcher) CFetch(cancel chan struct{}, k interface{}) (interface{}, error) {
+	sf.mutex.Lock()
+	defer sf.mutex.Unlock()
+	return sf.fetcher.CFetch(cancel, k)
+}
+
+// safeCFetchCloser a synced instance of FetchCloser
+type safeCFetchCloser struct {
+	safeCFetcher
+	io.Closer
+}
+
+// NewSafeCFetchCloser makes fc thread-safe. It will be a slow instance
+// because all CFetch() and Close() calls are serialized.
+func NewSafeCFetchCloser(fc CFetchCloser) CFetchCloser {
+	sf := newSafeCFetcher(fc)
+	return safeCFetchCloser{sf, fc}
+}
+
+// Close closes sfc
+func (sfc safeCFetchCloser) Close() error {
+	m := sfc.safeCFetcher.mutex
+	m.Lock()
+	defer m.Unlock()
+	return sfc.Closer.Close()
 }
 
 // NewSafeFetcher makes f thread-safe. It will be a slow instance because
 // all Fetch() calls are serialized.
 func NewSafeFetcher(f Fetcher) Fetcher {
-	return newSafeFetcher(f)
-}
-
-func newSafeFetcher(f Fetcher) SafeFetcher {
-	var mutex sync.Mutex
-	return SafeFetcher{&mutex, f}
-}
-
-// Fetch fetches a value
-func (sf SafeFetcher) Fetch(k interface{}) (interface{}, error) {
-	sf.mutex.Lock()
-	defer sf.mutex.Unlock()
-	return sf.fetcher.Fetch(k)
-}
-
-// SafeFetchCloser a synced instance of FetchCloser
-type SafeFetchCloser struct {
-	SafeFetcher
-	io.Closer
+	cf := asCFetcher{f}
+	sfcf := NewSafeCFetcher(cf)
+	return asFetcher{sfcf}
 }
 
 // NewSafeFetchCloser makes fc thread-safe. It will be a slow instance
-// because all Fetch() calls are serialized.
+// because all Fetch() and Close() calls are serialized.
 func NewSafeFetchCloser(fc FetchCloser) FetchCloser {
-	sf := newSafeFetcher(fc)
-	return SafeFetchCloser{sf, fc}
-}
-
-// Close closes sfc
-func (sfc SafeFetchCloser) Close() error {
-	m := sfc.SafeFetcher.mutex
-	m.Lock()
-	defer m.Unlock()
-	return sfc.Closer.Close()
+	cfc := struct {
+		CFetcher
+		io.Closer
+	}{asCFetcher{fc}, fc}
+	sfcfc := NewSafeCFetchCloser(cfc)
+	return struct {
+		Fetcher
+		io.Closer
+	}{asFetcher{sfcfc}, sfcfc}
 }

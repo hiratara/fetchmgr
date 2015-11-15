@@ -3,14 +3,15 @@ package fetchmgr
 import (
 	"container/heap"
 	"errors"
+	"io"
 	"sync"
 	"time"
 )
 
-// CachedFetcher caches fetched contents. It use Fetcher internally to fetch
-// resources. It will call Fetcher's Fetch method thread-safely.
-type CachedFetcher struct {
-	fetcher  Fetcher
+// CachedCFetcher caches fetched contents. It use CFetcher internally to fetch
+// resources. It will call CFetcher's CFetch method.
+type CachedCFetcher struct {
+	fetcher  CFetcher
 	ttl      time.Duration
 	interval time.Duration
 	mutex    sync.Mutex
@@ -22,16 +23,16 @@ type CachedFetcher struct {
 }
 
 type entry struct {
-	value func() (interface{}, error)
+	value func(chan struct{}) (interface{}, error)
 }
 
-// NewCachedFetcher creates CachedFetcher
-func NewCachedFetcher(
-	fetcher Fetcher,
+// NewCachedCFetcher creates CachedCFetcher
+func NewCachedCFetcher(
+	fetcher CFetcher,
 	ttl time.Duration,
 	interval time.Duration,
-) *CachedFetcher {
-	cached := &CachedFetcher{
+) *CachedCFetcher {
+	cached := &CachedCFetcher{
 		fetcher:  fetcher,
 		ttl:      ttl,
 		interval: interval,
@@ -45,21 +46,21 @@ func NewCachedFetcher(
 	return cached
 }
 
-// Fetch memoizes fetcher.Fetch method.
+// CFetch memoizes fetcher.Fetch method.
 // It calls fetcher.Fetch method and caches the return value unless there is no
 // cached results. Chached values are expired when c.ttl has passed.
-// If the internal Fetcher.Fetch returns err (!= nil), CachedFetcher doesn't
+// If the internal Fetcher.Fetch returns err (!= nil), CachedCFetcher doesn't
 // cache any results.
-func (c *CachedFetcher) Fetch(key interface{}) (interface{}, error) {
+func (c *CachedCFetcher) CFetch(cancel chan struct{}, key interface{}) (interface{}, error) {
 	e := pickEntry(c, key)
-	return e.value()
+	return e.value(cancel)
 }
 
 // Close closes this instance
-func (c *CachedFetcher) Close() error {
+func (c *CachedCFetcher) Close() error {
 	close(c.closed)
 
-	fc, ok := c.fetcher.(FetchCloser)
+	fc, ok := c.fetcher.(io.Closer)
 	if ok {
 		err := fc.Close()
 		if err != nil {
@@ -73,7 +74,7 @@ func (c *CachedFetcher) Close() error {
 // ErrFetcherClosed means the underlying fetcher has been closed
 var ErrFetcherClosed = errors.New("fetcher has been already closed")
 
-func pickEntry(c *CachedFetcher, key interface{}) entry {
+func pickEntry(c *CachedCFetcher, key interface{}) entry {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -86,7 +87,7 @@ func pickEntry(c *CachedFetcher, key interface{}) entry {
 	var err error
 	done := make(chan struct{})
 	go func() {
-		val, err = c.fetcher.Fetch(key)
+		val, err = c.fetcher.CFetch(c.closed, key)
 		close(done)
 
 		if err != nil {
@@ -98,10 +99,12 @@ func pickEntry(c *CachedFetcher, key interface{}) entry {
 		queueKey(c, key, c.ttl)
 	}()
 
-	lazy := func() (interface{}, error) {
+	lazy := func(cancel chan struct{}) (interface{}, error) {
 		select {
 		case <-done:
 			return val, err
+		case <-cancel:
+			return nil, ErrFetchCanceled
 		case <-c.closed:
 			return nil, ErrFetcherClosed
 		}
@@ -113,7 +116,7 @@ func pickEntry(c *CachedFetcher, key interface{}) entry {
 	return cached
 }
 
-func deleteKeys(c *CachedFetcher, keys ...interface{}) {
+func deleteKeys(c *CachedCFetcher, keys ...interface{}) {
 	if len(keys) == 0 {
 		return // Lock nothing
 	}
@@ -126,7 +129,7 @@ func deleteKeys(c *CachedFetcher, keys ...interface{}) {
 	}
 }
 
-func queueKey(c *CachedFetcher, key interface{}, ttl time.Duration) {
+func queueKey(c *CachedCFetcher, key interface{}, ttl time.Duration) {
 	c.queMutex.Lock()
 	defer c.queMutex.Unlock()
 
@@ -139,7 +142,7 @@ func queueKey(c *CachedFetcher, key interface{}, ttl time.Duration) {
 	}
 }
 
-func deleteLoop(c *CachedFetcher) {
+func deleteLoop(c *CachedCFetcher) {
 Loop:
 	for {
 		willDelete := make([]interface{}, 0, 1) // Will delete a few keys
@@ -183,7 +186,7 @@ Loop:
 	}
 }
 
-func awakeLoop(c *CachedFetcher) {
+func awakeLoop(c *CachedCFetcher) {
 	select {
 	case c.awake <- struct{}{}:
 	default:
@@ -216,4 +219,25 @@ func (dq *deleteQueue) Pop() interface{} {
 	ret := (*dq)[n-1]
 	*dq = (*dq)[0 : n-1]
 	return ret
+}
+
+// CachedFetcher caches fetched contents. It use Fetcher internally to fetch
+// resources. It will call Fetcher's Fetch method.
+type CachedFetcher struct {
+	*CachedCFetcher
+	Fetcher
+}
+
+// NewCachedFetcher creates CachedCFetcher
+func NewCachedFetcher(
+	fetcher Fetcher,
+	ttl time.Duration,
+	interval time.Duration,
+) CachedFetcher {
+	cfetcher := asCFetcher{fetcher}
+	ccfetcher := NewCachedCFetcher(cfetcher, ttl, interval)
+	return CachedFetcher{
+		ccfetcher,
+		asFetcher{ccfetcher},
+	}
 }

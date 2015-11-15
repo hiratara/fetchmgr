@@ -4,28 +4,29 @@ import (
 	"bytes"
 	"fmt"
 	"hash/fnv"
+	"io"
 	"unsafe"
 )
 
-// BucketedFetcher holds multiple fetchers and scatters tasks
+// BucketedCFetcher holds multiple fetchers and scatters tasks
 // by hash values of keys
-type BucketedFetcher []Fetcher
+type BucketedCFetcher []CFetcher
 
-// NewBucketedFetcher creates the instance
-func NewBucketedFetcher(fs []Fetcher) BucketedFetcher {
-	return BucketedFetcher(fs)
+// NewBucketedCFetcher creates the instance
+func NewBucketedCFetcher(fs []CFetcher) BucketedCFetcher {
+	return BucketedCFetcher(fs)
 }
 
-// Fetch calls one of internal Fetchers
-func (bf BucketedFetcher) Fetch(key interface{}) (interface{}, error) {
-	fs := ([]Fetcher)(bf)
+// CFetch calls one of internal Fetchers
+func (bf BucketedCFetcher) CFetch(cancel chan struct{}, key interface{}) (interface{}, error) {
+	fs := ([]CFetcher)(bf)
 	i := hash(key) % uint(len(fs))
-	return fs[i].Fetch(key)
+	return fs[i].CFetch(cancel, key)
 }
 
 // InnerError has been occured in internal Fetcher()
 type InnerError struct {
-	Fetcher Fetcher
+	Fetcher CFetcher
 	Err     error
 }
 
@@ -45,13 +46,13 @@ func (ies InnerErrors) Error() string {
 }
 
 // Close calls Close() for all internal FetchCloser instances
-func (bf BucketedFetcher) Close() error {
+func (bf BucketedCFetcher) Close() error {
 	var errs []InnerError
 	for _, f := range bf {
 		switch ff := f.(type) {
-		case FetchCloser:
+		case io.Closer:
 			err := ff.Close()
-			errs = append(errs, InnerError{ff, err})
+			errs = append(errs, InnerError{f, err})
 		}
 	}
 	if len(errs) > 0 {

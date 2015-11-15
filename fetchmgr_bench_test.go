@@ -2,6 +2,7 @@ package fetchmgr_test
 
 import (
 	"fmt"
+	"io"
 	"math/rand"
 	"strconv"
 	"sync"
@@ -80,7 +81,7 @@ func benchmarkFetcher(b *testing.B, wrap func(Fetcher) Fetcher) {
 		}
 		wg.Wait()
 
-		fc, ok := cached.(FetchCloser)
+		fc, ok := cached.(io.Closer)
 		if ok {
 			fc.Close()
 		}
