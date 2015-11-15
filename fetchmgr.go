@@ -6,24 +6,24 @@ import (
 	"time"
 )
 
-// SimpleFetcher is the interface in order to fetch outer resources
-type SimpleFetcher interface {
-	Fetch(interface{}) (interface{}, error)
-}
-
 // CFetcher is the interface in order to fetch outer resources
 // It also provides a cancel chan to cancel fetching.
 type CFetcher interface {
 	CFetch(chan struct{}, interface{}) (interface{}, error)
 }
 
-// ErrFetchCanceled means the CancelableFetch call was canceled
+// ErrFetchCanceled means the CFetch call was canceled
 var ErrFetchCanceled = errors.New("calling Fetch canceled")
+
+// CFetchCloser has Fetch and Close method
+type CFetchCloser interface {
+	CFetcher
+	io.Closer
+}
 
 // Fetcher is the interface in order to fetch outer resources
 type Fetcher interface {
-	SimpleFetcher
-	CFetcher
+	Fetch(interface{}) (interface{}, error)
 }
 
 // FetchCloser has Fetch and Close method
@@ -32,23 +32,19 @@ type FetchCloser interface {
 	io.Closer
 }
 
-// MakeCancelable makes Fetcher from SimpleFetcher
-type MakeCancelable struct {
-	SimpleFetcher
+type asCFetcher struct {
+	Fetcher
 }
 
-// CFetch fetches resources and provides the cancel chan
-func (tf MakeCancelable) CFetch(cancel chan struct{}, key interface{}) (interface{}, error) {
+func (tf asCFetcher) CFetch(cancel chan struct{}, key interface{}) (interface{}, error) {
 	return tf.Fetch(key)
 }
 
-// MakeSimple makes Fetcher from CancelableFetcher
-type MakeSimple struct {
+type asFetcher struct {
 	CFetcher
 }
 
-// Fetch fetches resources
-func (tf MakeSimple) Fetch(key interface{}) (interface{}, error) {
+func (tf asFetcher) Fetch(key interface{}) (interface{}, error) {
 	return tf.CFetch(nil, key)
 }
 
@@ -60,11 +56,11 @@ func (f FuncFetcher) Fetch(k interface{}) (interface{}, error) {
 	return f(k)
 }
 
-// New wraps the fetcher and memoizes the results for Fetch
-func New(
-	fetcher Fetcher,
+// CNew wraps the fetcher and memoizes the results for Fetch
+func CNew(
+	fetcher CFetcher,
 	ss ...Setting,
-) FetchCloser {
+) CFetchCloser {
 	setting := &fetcherSetting{
 		bucketNum: 10,
 		ttl:       1 * time.Minute,
@@ -77,14 +73,23 @@ func New(
 
 	fs := make([]CFetcher, setting.bucketNum)
 	for i := range fs {
-		fs[i] = NewCachedFetcher(fetcher, setting.ttl, setting.interval)
+		fs[i] = NewCachedCFetcher(fetcher, setting.ttl, setting.interval)
 	}
 
-	nbf := NewBucketedFetcher(fs)
+	return NewBucketedCFetcher(fs)
+}
+
+// New wraps the fetcher and memoizes the results for Fetch
+func New(
+	fetcher Fetcher,
+	ss ...Setting,
+) FetchCloser {
+	cfetcher := asCFetcher{fetcher}
+	ccfetcher := CNew(cfetcher, ss...)
 	return struct {
-		BucketedFetcher
-		SimpleFetcher
-	}{nbf, MakeSimple{nbf}}
+		Fetcher
+		io.Closer
+	}{asFetcher{ccfetcher}, ccfetcher}
 }
 
 type fetcherSetting struct {

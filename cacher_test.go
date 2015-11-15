@@ -16,12 +16,11 @@ func (SlowFetcher) Fetch(key interface{}) (interface{}, error) {
 
 func TestClose(t *testing.T) {
 	var f SlowFetcher
-	ccf := NewCachedFetcher(MakeCancelable{f}, time.Minute, time.Second)
-	cf := MakeSimple{ccf}
+	cf := NewCachedFetcher(f, time.Minute, time.Second)
 
 	go func() {
 		time.Sleep(time.Millisecond)
-		ccf.Close()
+		cf.Close()
 	}()
 
 	v, err := cf.Fetch("greeting")

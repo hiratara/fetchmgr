@@ -8,17 +8,17 @@ import (
 	"unsafe"
 )
 
-// BucketedFetcher holds multiple fetchers and scatters tasks
+// BucketedCFetcher holds multiple fetchers and scatters tasks
 // by hash values of keys
-type BucketedFetcher []CFetcher
+type BucketedCFetcher []CFetcher
 
-// NewBucketedFetcher creates the instance
-func NewBucketedFetcher(fs []CFetcher) BucketedFetcher {
-	return BucketedFetcher(fs)
+// NewBucketedCFetcher creates the instance
+func NewBucketedCFetcher(fs []CFetcher) BucketedCFetcher {
+	return BucketedCFetcher(fs)
 }
 
 // CFetch calls one of internal Fetchers
-func (bf BucketedFetcher) CFetch(cancel chan struct{}, key interface{}) (interface{}, error) {
+func (bf BucketedCFetcher) CFetch(cancel chan struct{}, key interface{}) (interface{}, error) {
 	fs := ([]CFetcher)(bf)
 	i := hash(key) % uint(len(fs))
 	return fs[i].CFetch(cancel, key)
@@ -46,7 +46,7 @@ func (ies InnerErrors) Error() string {
 }
 
 // Close calls Close() for all internal FetchCloser instances
-func (bf BucketedFetcher) Close() error {
+func (bf BucketedCFetcher) Close() error {
 	var errs []InnerError
 	for _, f := range bf {
 		switch ff := f.(type) {

@@ -31,7 +31,7 @@ func TestCachedFetcher(t *testing.T) {
 		3: {"", errors.New("no 3rd elems")},
 	}
 	cached := New(
-		MakeCancelable{fetcher},
+		fetcher,
 		SetInterval(time.Millisecond*1),
 		SetTTL(time.Millisecond*100),
 	)
@@ -141,7 +141,7 @@ func (c constFetcher) Fetch(key interface{}) (interface{}, error) {
 }
 
 func TestCachedFetcherNan(t *testing.T) {
-	cached := New(MakeCancelable{constFetcher(0)})
+	cached := New(constFetcher(0))
 	defer cached.Close()
 
 	ks := []float64{math.NaN(), math.Inf(+1), math.Inf(-1)}
@@ -174,7 +174,7 @@ func (cf *testCFetcher) CFetch(cancel chan struct{}, key interface{}) (interface
 
 func TestCancelAndClose(t *testing.T) {
 	cf := &testCFetcher{}
-	ccf := New(MakeSimple{cf})
+	ccf := CNew(cf)
 
 	var canceled uint32
 
