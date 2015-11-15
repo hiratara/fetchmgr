@@ -234,10 +234,10 @@ func NewCachedFetcher(
 	ttl time.Duration,
 	interval time.Duration,
 ) CachedFetcher {
-	cfetcher := asCFetcher{fetcher}
+	cfetcher := AsCFetcher{fetcher}
 	ccfetcher := NewCachedCFetcher(cfetcher, ttl, interval)
 	return CachedFetcher{
 		ccfetcher,
-		asFetcher{ccfetcher},
+		AsFetcher{ccfetcher},
 	}
 }

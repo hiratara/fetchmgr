@@ -53,9 +53,9 @@ func (sfc safeCFetchCloser) Close() error {
 // NewSafeFetcher makes f thread-safe. It will be a slow instance because
 // all Fetch() calls are serialized.
 func NewSafeFetcher(f Fetcher) Fetcher {
-	cf := asCFetcher{f}
+	cf := AsCFetcher{f}
 	sfcf := NewSafeCFetcher(cf)
-	return asFetcher{sfcf}
+	return AsFetcher{sfcf}
 }
 
 // NewSafeFetchCloser makes fc thread-safe. It will be a slow instance
@@ -64,10 +64,10 @@ func NewSafeFetchCloser(fc FetchCloser) FetchCloser {
 	cfc := struct {
 		CFetcher
 		io.Closer
-	}{asCFetcher{fc}, fc}
+	}{AsCFetcher{fc}, fc}
 	sfcfc := NewSafeCFetchCloser(cfc)
 	return struct {
 		Fetcher
 		io.Closer
-	}{asFetcher{sfcfc}, sfcfc}
+	}{AsFetcher{sfcfc}, sfcfc}
 }
