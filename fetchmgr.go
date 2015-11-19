@@ -9,7 +9,7 @@ import (
 // CFetcher is the interface in order to fetch outer resources
 // It also provides a cancel chan to cancel fetching.
 type CFetcher interface {
-	CFetch(chan struct{}, interface{}) (interface{}, error)
+	CFetch(<-chan struct{}, interface{}) (interface{}, error)
 }
 
 // ErrFetchCanceled means the CFetch call was canceled
@@ -32,19 +32,24 @@ type FetchCloser interface {
 	io.Closer
 }
 
-type asCFetcher struct {
+// AsCFetcher makes CFetcher from Fetcher. You will never cancel CFetch call of
+// this type
+type AsCFetcher struct {
 	Fetcher
 }
 
-func (tf asCFetcher) CFetch(cancel chan struct{}, key interface{}) (interface{}, error) {
+// CFetch fetches values
+func (tf AsCFetcher) CFetch(cancel <-chan struct{}, key interface{}) (interface{}, error) {
 	return tf.Fetch(key)
 }
 
-type asFetcher struct {
+// AsFetcher makes Fetcher from CFetcher.
+type AsFetcher struct {
 	CFetcher
 }
 
-func (tf asFetcher) Fetch(key interface{}) (interface{}, error) {
+// Fetch fetches values
+func (tf AsFetcher) Fetch(key interface{}) (interface{}, error) {
 	return tf.CFetch(nil, key)
 }
 
@@ -84,12 +89,12 @@ func New(
 	fetcher Fetcher,
 	ss ...Setting,
 ) FetchCloser {
-	cfetcher := asCFetcher{fetcher}
+	cfetcher := AsCFetcher{fetcher}
 	ccfetcher := CNew(cfetcher, ss...)
 	return struct {
 		Fetcher
 		io.Closer
-	}{asFetcher{ccfetcher}, ccfetcher}
+	}{AsFetcher{ccfetcher}, ccfetcher}
 }
 
 type fetcherSetting struct {

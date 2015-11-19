@@ -162,7 +162,7 @@ type testCFetcher struct {
 	cnt uint32
 }
 
-func (cf *testCFetcher) CFetch(cancel chan struct{}, key interface{}) (interface{}, error) {
+func (cf *testCFetcher) CFetch(cancel <-chan struct{}, key interface{}) (interface{}, error) {
 	cf.wg.Add(1)
 	select {
 	case <-cancel:
